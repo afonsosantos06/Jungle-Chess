@@ -107,7 +107,7 @@ class MainMenu:
         button_width = 200
         button_height = 60
         button_spacing = 20
-        total_buttons_height = (button_height * 3) + (button_spacing * 2)
+        total_buttons_height = (button_height * 4) + (button_spacing * 3)
         start_y = (Consts.WINDOW_HEIGHT - total_buttons_height) // 2
         
         self.random_button = Button("#DCDCDC", Consts.WINDOW_WIDTH/2 - button_width/2, start_y, button_width, button_height, 
@@ -115,19 +115,59 @@ class MainMenu:
         self.minimax_button = Button("#4CAF50", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + button_height + button_spacing, 
                                    button_width, button_height, border_radius=15, text="Minimax", 
                                    font=Consts.button_font)
-        self.back_button = Button("#808080", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + (button_height + button_spacing) * 2, 
+        self.negamax_button = Button("#2196F3", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + (button_height + button_spacing) * 2, 
+                                   button_width, button_height, border_radius=15, text="Negamax", 
+                                   font=Consts.button_font)
+        self.back_button = Button("#808080", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + (button_height + button_spacing) * 3, 
                                  button_width, button_height, border_radius=15, text="Voltar", 
                                  font=Consts.button_font)
         
         # Desenha os botões
         self.random_button.draw(self.display)
         self.minimax_button.draw(self.display)
+        self.negamax_button.draw(self.display)
         self.back_button.draw(self.display)
         
         pg.display.flip()
 
     def draw_minimax_difficulty_menu(self):
         """Desenha o menu de seleção de dificuldade do Minimax"""
+        self.display.fill(Consts.BACKGROUND_COLOR)
+        
+        # Título
+        title = Consts.main_title_font.render("Selecione a Dificuldade", True, Consts.TEXT_COLOR)
+        title_rect = title.get_rect(center=(Consts.WINDOW_WIDTH/2, 100))
+        self.display.blit(title, title_rect)
+        
+        # Botões centralizados
+        button_width = 200
+        button_height = 60
+        button_spacing = 20
+        total_buttons_height = (button_height * 4) + (button_spacing * 3)
+        start_y = (Consts.WINDOW_HEIGHT - total_buttons_height) // 2
+        
+        self.easy_button = Button("#4CAF50", Consts.WINDOW_WIDTH/2 - button_width/2, start_y, button_width, button_height, 
+                                   border_radius=15, text="Fácil", font=Consts.button_font)
+        self.medium_button = Button("#FFA500", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + button_height + button_spacing, 
+                                   button_width, button_height, border_radius=15, text="Médio", 
+                                   font=Consts.button_font)
+        self.hard_button = Button("#f44336", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + (button_height + button_spacing) * 2, 
+                                   button_width, button_height, border_radius=15, text="Difícil", 
+                                   font=Consts.button_font)
+        self.back_button = Button("#808080", Consts.WINDOW_WIDTH/2 - button_width/2, start_y + (button_height + button_spacing) * 3, 
+                                 button_width, button_height, border_radius=15, text="Voltar", 
+                                 font=Consts.button_font)
+        
+        # Desenha os botões
+        self.easy_button.draw(self.display)
+        self.medium_button.draw(self.display)
+        self.hard_button.draw(self.display)
+        self.back_button.draw(self.display)
+        
+        pg.display.flip()
+        
+    def draw_negamax_difficulty_menu(self):
+        """Desenha o menu de seleção de dificuldade do Negamax"""
         self.display.fill(Consts.BACKGROUND_COLOR)
         
         # Título
@@ -182,6 +222,9 @@ class MainMenu:
                     elif self.minimax_button.is_over(mouse_pos):
                         self.minimax_difficulty_loop()
                         return
+                    elif self.negamax_button.is_over(mouse_pos):
+                        self.negamax_difficulty_loop()
+                        return
                     elif self.back_button.is_over(mouse_pos):
                         # Limpa a tela e redesenha o menu principal
                         self.display.fill(Consts.BACKGROUND_COLOR)
@@ -209,15 +252,47 @@ class MainMenu:
                     
                     # Verifica clique nos botões
                     if self.easy_button.is_over(mouse_pos):
-                        game = Controller(True, "minimax", 2)
+                        game = Controller(True, "minimax", 2)  # Fácil - depth 2
                         return
                     elif self.medium_button.is_over(mouse_pos):
-                        game = Controller(True, "minimax", 3)
+                        game = Controller(True, "minimax", 3)  # Médio - depth 3
                         return
                     elif self.hard_button.is_over(mouse_pos):
-                        game = Controller(True, "minimax", 4)
+                        game = Controller(True, "minimax", 4)  # Difícil - depth 4
                         return
                     elif self.back_button.is_over(mouse_pos):
-                        return  # Volta para o menu de seleção de IA
+                        # Volta para o menu de seleção de IA
+                        self.ai_selection_loop()
+                        return
+                        
+            self.clock.tick(60)
+
+    def negamax_difficulty_loop(self):
+        """Loop do menu de seleção de dificuldade do Negamax"""
+        while True:
+            self.draw_negamax_difficulty_menu()
+            
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
+                    
+                if event.type == pg.MOUSEBUTTONDOWN:
+                    mouse_pos = pg.mouse.get_pos()
+                    
+                    # Verifica clique nos botões
+                    if self.easy_button.is_over(mouse_pos):
+                        game = Controller(True, "negamax", 2)  # Fácil - depth 2
+                        return
+                    elif self.medium_button.is_over(mouse_pos):
+                        game = Controller(True, "negamax", 3)  # Médio - depth 3
+                        return
+                    elif self.hard_button.is_over(mouse_pos):
+                        game = Controller(True, "negamax", 4)  # Difícil - depth 4
+                        return
+                    elif self.back_button.is_over(mouse_pos):
+                        # Volta para o menu de seleção de IA
+                        self.ai_selection_loop()
+                        return
                         
             self.clock.tick(60)

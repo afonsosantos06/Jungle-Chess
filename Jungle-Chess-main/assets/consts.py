@@ -1,11 +1,17 @@
 import pygame as pg
+import os
+
 class Consts:
     pg.init()
-    button_font = pg.font.Font('assets/button_font.ttf', 30)
-    main_title_font = pg.font.Font('assets/main_title_font.ttf', 50)
-    sub_title_font = pg.font.Font('assets/main_title_font.ttf', 30)
-    message_font = pg.font.Font('assets/main_title_font.ttf', 35)
-    label_font = pg.font.Font('assets/main_title_font.ttf', 15)
+    # Obtém o diretório atual do arquivo
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Caminhos das fontes
+    button_font = pg.font.Font(os.path.join(current_dir, 'button_font.ttf'), 30)
+    main_title_font = pg.font.Font(os.path.join(current_dir, 'main_title_font.ttf'), 50)
+    sub_title_font = pg.font.Font(os.path.join(current_dir, 'main_title_font.ttf'), 30)
+    message_font = pg.font.Font(os.path.join(current_dir, 'main_title_font.ttf'), 35)
+    label_font = pg.font.Font(os.path.join(current_dir, 'main_title_font.ttf'), 15)
 
     # Dimensões da janela
     WINDOW_WIDTH = 1000

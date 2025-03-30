@@ -556,10 +556,10 @@ class AI:
                     # Progresso em direção à toca adversária
                     if piece < 0:  # Peça vermelha (AI)
                         dist_to_den = abs(i - self.dens[1][0]) + abs(j - self.dens[1][1])
-                        score += (8 - dist_to_den) * 0.5  # Aumentado o peso
+                        score += (8 - dist_to_den) * 0.8  # Aumentado o peso
                     else:  # Peça azul
                         dist_to_den = abs(i - self.dens[0][0]) + abs(j - self.dens[0][1])
-                        score -= (8 - dist_to_den) * 0.5  # Aumentado o peso
+                        score -= (8 - dist_to_den) * 0.8  # Aumentado o peso
         
         # 3. Avaliação de armadilhas (otimizada)
         for trap in self.traps:
@@ -567,21 +567,21 @@ class AI:
             if piece != 0:
                 if piece < 0 and trap in self.traps[:3]:  # Peça vermelha na armadilha azul
                     if self.model.is_piece_safe_in_trap(trap, piece):
-                        score += 5
+                        score += 8  # Aumentado o peso
                     else:
-                        score -= 25
+                        score -= 30  # Aumentado a penalidade
                 elif piece > 0 and trap in self.traps[3:]:  # Peça azul na armadilha vermelha
                     if self.model.is_piece_safe_in_trap(trap, piece):
-                        score -= 5
+                        score -= 8  # Aumentado o peso
                     else:
-                        score += 25
+                        score += 30  # Aumentado a penalidade
         
         # 4. Avaliação de mobilidade (otimizada)
         red_moves = len(self.get_all_possible_moves(True))
         blue_moves = len(self.get_all_possible_moves(False))
         if red_moves + blue_moves > 0:
             mobility_score = (red_moves - blue_moves) / (red_moves + blue_moves)
-            score += mobility_score * 3  # Aumentado o peso
+            score += mobility_score * 4  # Aumentado o peso
         
         # 5. Avaliação de ameaças (otimizada)
         for i in range(7):
@@ -595,32 +595,65 @@ class AI:
                             if target != 0:
                                 if piece < 0 and target > 0:  # Ameaça vermelha
                                     if abs(piece) >= abs(target):
-                                        score += 2.5  # Aumentado o peso
+                                        score += 3.5  # Aumentado o peso
                                 elif piece > 0 and target < 0:  # Ameaça azul
                                     if abs(piece) >= abs(target):
-                                        score -= 2.5  # Aumentado o peso
+                                        score -= 3.5  # Aumentado o peso
         
-        # 6. Avaliação de controle do centro (nova)
+        # 6. Avaliação de controle do centro (otimizada)
         center_positions = [(3, 2), (3, 3)]
         for pos in center_positions:
             piece = self.model.game_board[pos[0], pos[1]]
             if piece != 0:
                 if piece < 0:  # Peça vermelha
-                    score += 3
+                    score += 4  # Aumentado o peso
                 else:  # Peça azul
-                    score -= 3
+                    score -= 4  # Aumentado o peso
         
-        # 7. Avaliação de proteção de peças valiosas (nova)
+        # 7. Avaliação de proteção de peças valiosas (otimizada)
         for i in range(7):
             for j in range(6):
                 piece = self.model.game_board[i, j]
                 if piece != 0 and abs(piece) >= 7:  # Leão e Elefante
                     if piece < 0:  # Peça vermelha
                         if self.model.is_piece_safe_in_trap((i, j), piece):
-                            score += 4
+                            score += 6  # Aumentado o peso
                     else:  # Peça azul
                         if self.model.is_piece_safe_in_trap((i, j), piece):
-                            score -= 4
+                            score -= 6  # Aumentado o peso
+
+        # 8. Avaliação de posicionamento estratégico (nova)
+        strategic_positions = [(2, 2), (2, 3), (4, 2), (4, 3)]  # Posições estratégicas
+        for pos in strategic_positions:
+            piece = self.model.game_board[pos[0], pos[1]]
+            if piece != 0:
+                if piece < 0:  # Peça vermelha
+                    score += 2
+                else:  # Peça azul
+                    score -= 2
+
+        # 9. Avaliação de proteção mútua (nova)
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece != 0:
+                    protected = False
+                    for dir in Consts.DIRECTIONS:
+                        new_pos = (i + dir[0], j + dir[1])
+                        if not (self.model.is_outside_r_edge(new_pos[1]) or 
+                               self.model.is_outside_l_edge(new_pos[1]) or 
+                               self.model.is_outside_u_edge(new_pos[0]) or 
+                               self.model.is_outside_d_edge(new_pos[0])):
+                            adjacent_piece = self.model.game_board[new_pos[0], new_pos[1]]
+                            if (piece < 0 and adjacent_piece < 0) or (piece > 0 and adjacent_piece > 0):
+                                if self.model.is_self_rank_higher(adjacent_piece, piece):
+                                    protected = True
+                                    break
+                    if protected:
+                        if piece < 0:  # Peça vermelha
+                            score += 1.5
+                        else:  # Peça azul
+                            score -= 1.5
         
         # Armazena no cache
         self.position_cache[board_key] = score
@@ -641,65 +674,47 @@ class AI:
         moves.sort(key=lambda x: self.evaluate_move(x), reverse=is_ai_turn)
         return moves[:self.move_limit]  # Retorna apenas os melhores movimentos
     
-    def minimax(self, depth: int, alpha: float, beta: float, is_ai_turn: bool) -> tuple:
-        """Implementa o algoritmo MiniMax com cortes alfa-beta (otimizada)"""
+    def negamax(self, depth: int, alpha: float, beta: float, color: int) -> tuple:
+        """Implementa o algoritmo Negamax com cortes alfa-beta (otimizada)"""
         if depth == 0 or self.model.is_win()[0]:
-            return self.evaluate_board(), None
+            return color * self.evaluate_board(), None
         
-        moves = self.get_all_possible_moves(is_ai_turn)
+        moves = self.get_all_possible_moves(color < 0)
         if not moves:  # Se não houver movimentos possíveis
-            return self.evaluate_board(), None
+            return color * self.evaluate_board(), None
             
-        if is_ai_turn:
-            max_eval = float('-inf')
-            best_move = moves[0]  # Usa o primeiro movimento como padrão
+        max_eval = float('-inf')
+        best_move = moves[0]  # Usa o primeiro movimento como padrão
+        
+        for start, end in moves:
+            # Faz a jogada
+            piece_value = self.model.game_board[end[0], end[1]]
+            self.model.game_board[end[0], end[1]] = self.model.game_board[start[0], start[1]]
+            self.model.game_board[start[0], start[1]] = 0
             
-            for start, end in moves:
-                # Faz a jogada
-                piece_value = self.model.game_board[end[0], end[1]]
-                self.model.game_board[end[0], end[1]] = self.model.game_board[start[0], start[1]]
-                self.model.game_board[start[0], start[1]] = 0
-                
-                # Avalia a jogada
-                eval, _ = self.minimax(depth - 1, alpha, beta, False)
-                
-                # Desfaz a jogada
-                self.model.game_board[start[0], start[1]] = self.model.game_board[end[0], end[1]]
-                self.model.game_board[end[0], end[1]] = piece_value
-                
-                if eval > max_eval:
-                    max_eval = eval
-                    best_move = (start, end)
-                alpha = max(alpha, eval)
-                if beta <= alpha:
-                    break
-                    
-            return max_eval, best_move
-        else:
-            min_eval = float('inf')
-            best_move = moves[0]  # Usa o primeiro movimento como padrão
+            # Avalia a jogada
+            eval, _ = self.negamax(depth - 1, -beta, -alpha, -color)
+            eval = -eval  # Inverte o valor da avaliação
             
-            for start, end in moves:
-                # Faz a jogada
-                piece_value = self.model.game_board[end[0], end[1]]
-                self.model.game_board[end[0], end[1]] = self.model.game_board[start[0], start[1]]
-                self.model.game_board[start[0], start[1]] = 0
+            # Desfaz a jogada
+            self.model.game_board[start[0], start[1]] = self.model.game_board[end[0], end[1]]
+            self.model.game_board[end[0], end[1]] = piece_value
+            
+            if eval > max_eval:
+                max_eval = eval
+                best_move = (start, end)
+            alpha = max(alpha, eval)
+            if beta <= alpha:
+                break
                 
-                # Avalia a jogada
-                eval, _ = self.minimax(depth - 1, alpha, beta, True)
-                
-                # Desfaz a jogada
-                self.model.game_board[start[0], start[1]] = self.model.game_board[end[0], end[1]]
-                self.model.game_board[end[0], end[1]] = piece_value
-                
-                if eval < min_eval:
-                    min_eval = eval
-                    best_move = (start, end)
-                beta = min(beta, eval)
-                if beta <= alpha:
-                    break
-                    
-            return min_eval, best_move
+        return max_eval, best_move
+
+    def get_best_move(self) -> tuple:
+        """Retorna a melhor jogada para a IA"""
+        # Limpa o cache antes de cada nova busca
+        self.position_cache.clear()
+        _, best_move = self.negamax(self.max_depth, float('-inf'), float('inf'), -1)  # -1 para peças vermelhas (IA)
+        return best_move
     
     def evaluate_move(self, move: tuple) -> float:
         """Avalia um movimento específico para ordenação (otimizada)"""
@@ -756,13 +771,269 @@ class AI:
                             score += 4
         
         return score
-    
+
+
+class RandomAI:
+    def __init__(self, model: Model):
+        self.model = model
+        
+    def get_best_move(self) -> tuple:
+        """Retorna uma jogada aleatória válida"""
+        # Obtém todas as jogadas possíveis para a IA (peças vermelhas)
+        possible_moves = []
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece < 0:  # Peça vermelha (IA)
+                    moves = self.model.get_possible_moves((i, j))
+                    if moves:
+                        for move in moves:
+                            possible_moves.append(((i, j), move))
+        
+        # Se não houver movimentos possíveis, retorna None
+        if not possible_moves:
+            return None
+            
+        # Escolhe um movimento aleatório
+        return random.choice(possible_moves)  
+
+
+class NegamaxAI:
+    def __init__(self, model: Model, depth: int = 4):
+        self.model = model
+        self.max_depth = depth
+        self.position_cache = {}
+        
+        # Valores das peças (otimizados)
+        self.piece_values = {
+            1: 6,   # Rato
+            2: 3,   # Gato
+            3: 4,   # Cão
+            4: 5,   # Lobo
+            5: 6,   # Leopardo
+            6: 7,   # Tigre
+            7: 8,   # Leão
+            8: 10   # Elefante
+        }
+        
+        # Posições das armadilhas
+        self.traps = [
+            (0, 2), (0, 4), (1, 3),  # Armadilhas vermelhas
+            (6, 1), (6, 3), (5, 2)   # Armadilhas azuis
+        ]
+        
+        # Posições das tocas
+        self.dens = [(0, 3), (6, 2)]  # (vermelho, azul)
+        
+        # Limite de movimentos para poda
+        self.move_limit = 20
+
+    def evaluate_board(self) -> float:
+        """Avalia o estado atual do tabuleiro"""
+        board_key = str(self.model.game_board)
+        if board_key in self.position_cache:
+            return self.position_cache[board_key]
+            
+        score = 0
+        
+        # Avaliação de material
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece != 0:
+                    value = self.piece_values[abs(piece)]
+                    if piece < 0:  # Peça vermelha (AI)
+                        score += value
+                    else:  # Peça azul
+                        score -= value
+        
+        # Avaliação de posição
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece != 0:
+                    if piece < 0:  # Peça vermelha (AI)
+                        dist_to_den = abs(i - self.dens[1][0]) + abs(j - self.dens[1][1])
+                        score += (8 - dist_to_den) * 0.5
+                    else:  # Peça azul
+                        dist_to_den = abs(i - self.dens[0][0]) + abs(j - self.dens[0][1])
+                        score -= (8 - dist_to_den) * 0.5
+        
+        # Avaliação de armadilhas
+        for trap in self.traps:
+            piece = self.model.game_board[trap[0], trap[1]]
+            if piece != 0:
+                if piece < 0 and trap in self.traps[:3]:  # Peça vermelha na armadilha azul
+                    if self.model.is_piece_safe_in_trap(trap, piece):
+                        score += 5
+                    else:
+                        score -= 25
+                elif piece > 0 and trap in self.traps[3:]:  # Peça azul na armadilha vermelha
+                    if self.model.is_piece_safe_in_trap(trap, piece):
+                        score -= 5
+                    else:
+                        score += 25
+        
+        # Avaliação de mobilidade
+        red_moves = len(self.get_all_possible_moves(True))
+        blue_moves = len(self.get_all_possible_moves(False))
+        if red_moves + blue_moves > 0:
+            mobility_score = (red_moves - blue_moves) / (red_moves + blue_moves)
+            score += mobility_score * 3
+        
+        # Avaliação de ameaças
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece != 0:
+                    moves = self.model.get_possible_moves((i, j))
+                    if moves:
+                        for move in moves:
+                            target = self.model.game_board[move[0], move[1]]
+                            if target != 0:
+                                if piece < 0 and target > 0:  # Ameaça vermelha
+                                    if abs(piece) >= abs(target):
+                                        score += 2.5
+                                elif piece > 0 and target < 0:  # Ameaça azul
+                                    if abs(piece) >= abs(target):
+                                        score -= 2.5
+        
+        # Avaliação de controle do centro
+        center_positions = [(3, 2), (3, 3)]
+        for pos in center_positions:
+            piece = self.model.game_board[pos[0], pos[1]]
+            if piece != 0:
+                if piece < 0:  # Peça vermelha
+                    score += 3
+                else:  # Peça azul
+                    score -= 3
+        
+        # Avaliação de proteção de peças valiosas
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if piece != 0 and abs(piece) >= 7:  # Leão e Elefante
+                    if piece < 0:  # Peça vermelha
+                        if self.model.is_piece_safe_in_trap((i, j), piece):
+                            score += 4
+                    else:  # Peça azul
+                        if self.model.is_piece_safe_in_trap((i, j), piece):
+                            score -= 4
+        
+        self.position_cache[board_key] = score
+        return score
+
+    def get_all_possible_moves(self, is_ai_turn: bool) -> list:
+        """Retorna todas as possíveis jogadas para o jogador atual"""
+        moves = []
+        for i in range(7):
+            for j in range(6):
+                piece = self.model.game_board[i, j]
+                if (is_ai_turn and piece < 0) or (not is_ai_turn and piece > 0):
+                    possible_moves = self.model.get_possible_moves((i, j))
+                    if possible_moves:
+                        moves.extend(((i, j), move) for move in possible_moves)
+        
+        moves.sort(key=lambda x: self.evaluate_move(x), reverse=is_ai_turn)
+        return moves[:self.move_limit]
+
+    def negamax(self, depth: int, alpha: float, beta: float, color: int) -> tuple:
+        """Implementa o algoritmo Negamax com cortes alfa-beta"""
+        if depth == 0 or self.model.is_win()[0]:
+            return color * self.evaluate_board(), None
+        
+        moves = self.get_all_possible_moves(color > 0)
+        if not moves:
+            return color * self.evaluate_board(), None
+            
+        best_value = float('-inf')
+        best_move = moves[0]
+        
+        for start, end in moves:
+            # Faz a jogada
+            piece_value = self.model.game_board[end[0], end[1]]
+            self.model.game_board[end[0], end[1]] = self.model.game_board[start[0], start[1]]
+            self.model.game_board[start[0], start[1]] = 0
+            
+            # Avalia a jogada
+            value, _ = self.negamax(depth - 1, -beta, -alpha, -color)
+            value = -value
+            
+            # Desfaz a jogada
+            self.model.game_board[start[0], start[1]] = self.model.game_board[end[0], end[1]]
+            self.model.game_board[end[0], end[1]] = piece_value
+            
+            if value > best_value:
+                best_value = value
+                best_move = (start, end)
+            
+            alpha = max(alpha, value)
+            if alpha >= beta:
+                break
+                
+        return best_value, best_move
+
+    def evaluate_move(self, move: tuple) -> float:
+        """Avalia um movimento específico para ordenação"""
+        start, end = move
+        score = 0
+        
+        # Captura de peça
+        if self.model.game_board[end[0], end[1]] != 0:
+            captured_piece = abs(self.model.game_board[end[0], end[1]])
+            score += self.piece_values[captured_piece] * 2
+        
+        # Captura de peça em armadilha
+        if end in self.traps:
+            if self.model.game_board[end[0], end[1]] != 0:
+                score += 30
+        
+        # Movimento para armadilha adversária
+        if end in self.traps[:3] and self.model.game_board[start[0], start[1]] < 0:
+            score += 5
+        elif end in self.traps[3:] and self.model.game_board[start[0], start[1]] > 0:
+            score += 5
+        
+        # Movimento em direção à toca adversária
+        if self.model.game_board[start[0], start[1]] < 0:
+            dist_before = abs(start[0] - self.dens[1][0]) + abs(start[1] - self.dens[1][1])
+            dist_after = abs(end[0] - self.dens[1][0]) + abs(end[1] - self.dens[1][1])
+            if dist_after < dist_before:
+                score += 3
+        else:
+            dist_before = abs(start[0] - self.dens[0][0]) + abs(start[1] - self.dens[0][1])
+            dist_after = abs(end[0] - self.dens[0][0]) + abs(end[1] - self.dens[0][1])
+            if dist_after < dist_before:
+                score += 3
+        
+        # Movimento para o centro
+        center_positions = [(3, 2), (3, 3)]
+        if end in center_positions:
+            score += 2
+        
+        # Movimento que protege peças valiosas
+        piece = self.model.game_board[start[0], start[1]]
+        if abs(piece) >= 6:  # Tigre, Leão e Elefante
+            if self.model.is_piece_safe_in_trap(end, piece):
+                score += 3
+        
+        # Movimento que ameaça peças valiosas
+        for dir in Consts.DIRECTIONS:
+            threat_pos = (end[0] + dir[0], end[1] + dir[1])
+            if (0 <= threat_pos[0] < 7 and 0 <= threat_pos[1] < 6):
+                threat_piece = self.model.game_board[threat_pos[0], threat_pos[1]]
+                if threat_piece != 0 and abs(threat_piece) >= 6:
+                    if (piece < 0 and threat_piece > 0) or (piece > 0 and threat_piece < 0):
+                        if self.model.is_self_rank_higher(piece, threat_piece):
+                            score += 4
+        
+        return score
+
     def get_best_move(self) -> tuple:
         """Retorna a melhor jogada para a IA"""
-        # Limpa o cache antes de cada nova busca
         self.position_cache.clear()
-        _, best_move = self.minimax(self.max_depth, float('-inf'), float('inf'), True)
-        return best_move  
+        _, best_move = self.negamax(self.max_depth, float('-inf'), float('inf'), 1)
+        return best_move
 
 
 class RandomAI:

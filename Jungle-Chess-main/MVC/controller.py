@@ -1,4 +1,4 @@
-from MVC.model import Model, AI, RandomAI
+from MVC.model import Model, AI, RandomAI, NegamaxAI
 from MVC.view import View
 import time
 import pygame as pg
@@ -23,6 +23,8 @@ class Controller:
         if is_pve:
             if ai_type == "minimax":
                 self.ai = AI(self.model, depth)
+            elif ai_type == "negamax":
+                self.ai = NegamaxAI(self.model, depth)
             else:  # random
                 self.ai = RandomAI(self.model)
         
